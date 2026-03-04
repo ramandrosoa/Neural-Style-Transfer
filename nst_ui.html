@@ -1,0 +1,608 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Neural Style Transfer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Mono:wght@300;400;500&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;1,9..40,300&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:           #080810;
+    --surface:      #0e0e1c;
+    --surface2:     #13132a;
+    --border:       rgba(255,255,255,0.06);
+    --border-active:rgba(160,130,255,0.35);
+    --text:         #d8d5f0;
+    --text-muted:   #5a5878;
+    --text-dim:     #7e7a9a;
+    --accent:       #9d7eff;
+    --accent2:      #5eb8ff;
+    --accent3:      #ff7eb3;
+    --green:        #4fffb0;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+    position: relative;
+  }
+
+  body::before {
+    content: '';
+    position: fixed; inset: 0;
+    background:
+      radial-gradient(ellipse 60% 40% at 20% 10%, rgba(100,60,200,0.12) 0%, transparent 60%),
+      radial-gradient(ellipse 50% 50% at 80% 80%, rgba(30,80,200,0.08) 0%, transparent 60%),
+      radial-gradient(ellipse 30% 30% at 60% 30%, rgba(200,80,150,0.05) 0%, transparent 50%);
+    pointer-events: none; z-index: 0;
+  }
+
+  body::after {
+    content: '';
+    position: fixed; inset: -50%;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E");
+    opacity: 0.025; pointer-events: none; z-index: 0;
+  }
+
+  .page {
+    position: relative; z-index: 1;
+    max-width: 960px; margin: 0 auto;
+    padding: 64px 32px 80px;
+  }
+
+  /* ── Header ── */
+  .header { margin-bottom: 56px; }
+
+  .eyebrow {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 16px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .eyebrow::before {
+    content: ''; width: 24px; height: 1px;
+    background: var(--accent); display: inline-block;
+  }
+
+  h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(2.4rem, 5vw, 3.8rem);
+    line-height: 1.1; color: #fff;
+    margin-bottom: 14px; letter-spacing: -0.02em;
+  }
+  h1 em {
+    font-style: italic;
+    background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 60%, var(--accent3) 100%);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+  }
+
+  .subtitle {
+    color: var(--text-dim); font-size: 1rem; font-weight: 300;
+    max-width: 480px; line-height: 1.65;
+  }
+
+  .section-label {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.65rem; letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--text-muted); margin-bottom: 20px;
+  }
+
+  /* ── Layout ── */
+  .two-col {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 16px; margin-bottom: 16px;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px; padding: 28px;
+    position: relative; overflow: hidden;
+    transition: border-color 0.2s;
+  }
+  .card::before {
+    content: '';
+    position: absolute; top: 0; left: 0; right: 0; height: 2px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    opacity: 0; transition: opacity 0.3s;
+  }
+  .card:hover { border-color: var(--border-active); }
+  .card:hover::before { opacity: 1; }
+
+  /* ── Drop zone ── */
+  .drop-zone {
+    border: 1px dashed rgba(157,126,255,0.2);
+    border-radius: 12px; height: 230px;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 14px; cursor: pointer;
+    transition: border-color .25s, background .25s;
+    position: relative; overflow: hidden;
+    background: var(--surface2);
+  }
+  .drop-zone:hover, .drop-zone.dragover {
+    border-color: var(--accent);
+    background: rgba(157,126,255,0.05);
+  }
+  .drop-zone input[type=file] {
+    position: absolute; inset: 0; opacity: 0; cursor: pointer;
+  }
+  .dz-icon { font-size: 26px; opacity: 0.2; }
+  .drop-zone p {
+    color: var(--text-muted); font-size: 0.82rem;
+    text-align: center; line-height: 1.7;
+  }
+  .drop-zone p strong { color: var(--accent); font-weight: 400; }
+  .drop-zone .preview {
+    position: absolute; inset: 0;
+    object-fit: cover; width: 100%; height: 100%;
+    opacity: 0; transition: opacity .3s; border-radius: 12px;
+  }
+  .drop-zone .preview.visible { opacity: 1; }
+  .drop-zone .overlay {
+    position: absolute; inset: 0; border-radius: 12px;
+    background: rgba(8,8,16,.65);
+    display: flex; align-items: center; justify-content: center;
+    opacity: 0; transition: opacity .2s;
+  }
+  .drop-zone:hover .overlay.has-img { opacity: 1; }
+  .drop-zone .overlay span {
+    font-family: 'DM Mono', monospace;
+    font-size: 0.7rem; letter-spacing: .1em; color: var(--accent);
+  }
+
+  .filename {
+    margin-top: 10px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.66rem; color: var(--text-muted); letter-spacing: .04em;
+  }
+
+  /* ── Content grid ── */
+  .content-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px;
+  }
+  .content-card {
+    aspect-ratio: 1; border: 1px solid var(--border);
+    border-radius: 10px; overflow: hidden;
+    cursor: pointer; position: relative;
+    transition: border-color .2s, transform .2s;
+    background: var(--surface2);
+  }
+  .content-card:hover { border-color: rgba(94,184,255,0.45); transform: scale(1.02); }
+  .content-card.selected { border-color: var(--accent2); }
+  .content-card.selected::after {
+    content: '✓';
+    position: absolute; top: 6px; right: 6px;
+    width: 18px; height: 18px;
+    background: var(--accent2); color: var(--bg);
+    border-radius: 50%; font-size: 10px;
+    display: flex; align-items: center; justify-content: center;
+    line-height: 18px; text-align: center;
+    font-family: 'DM Mono', monospace;
+  }
+  .content-card img {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+    filter: saturate(.7) brightness(.88);
+    transition: filter .25s, transform .3s;
+  }
+  .content-card:hover img { filter: saturate(1) brightness(1); transform: scale(1.07); }
+  .content-card .card-name {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    padding: 6px 8px;
+    background: linear-gradient(transparent, rgba(8,8,16,.9));
+    font-family: 'DM Mono', monospace;
+    font-size: 0.58rem; color: var(--text-muted);
+    letter-spacing: .08em; text-transform: uppercase;
+  }
+  .placeholder-card {
+    aspect-ratio: 1;
+    border: 1px dashed rgba(255,255,255,0.04);
+    border-radius: 10px; background: var(--surface2);
+    display: flex; align-items: center; justify-content: center;
+  }
+  .ph-icon { font-size: 16px; opacity: .1; }
+
+  /* ── Params ── */
+  .params-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px; padding: 28px;
+    margin-bottom: 16px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr) auto;
+    gap: 24px; align-items: end;
+  }
+
+  .param-group label {
+    display: block;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--text-muted); margin-bottom: 12px;
+  }
+  .param-group input[type=range] {
+    width: 100%; -webkit-appearance: none; appearance: none;
+    height: 3px; background: rgba(255,255,255,0.06);
+    outline: none; border-radius: 99px;
+  }
+  .param-group input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 13px; height: 13px;
+    background: var(--accent); border-radius: 50%; cursor: pointer;
+    box-shadow: 0 0 8px rgba(157,126,255,0.5);
+  }
+  .param-group .val {
+    margin-top: 8px; color: var(--accent);
+    font-family: 'DM Mono', monospace; font-size: 0.8rem;
+  }
+  .param-group input[type=number] {
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); font-family: 'DM Mono', monospace;
+    font-size: 0.85rem; padding: 10px 14px; width: 100%;
+    outline: none; border-radius: 10px;
+    transition: border-color .2s, box-shadow .2s;
+  }
+  .param-group input[type=number]:focus {
+    border-color: var(--border-active);
+    box-shadow: 0 0 0 3px rgba(157,126,255,0.08);
+  }
+
+  /* ── Run button ── */
+  .run-btn {
+    padding: 13px 28px;
+    background: linear-gradient(135deg, #6d40e0 0%, #3a6fd8 100%);
+    color: #fff; border: none; border-radius: 12px;
+    font-family: 'DM Sans', sans-serif; font-size: 0.9rem; font-weight: 500;
+    cursor: pointer; transition: opacity .2s, transform .15s;
+    white-space: nowrap; align-self: end;
+    position: relative; overflow: hidden;
+  }
+  .run-btn::after {
+    content: ''; position: absolute; inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 60%);
+  }
+  .run-btn:hover:not(:disabled) { opacity: 0.9; transform: translateY(-1px); }
+  .run-btn:active:not(:disabled) { transform: translateY(0); }
+  .run-btn:disabled { opacity: .35; cursor: not-allowed; }
+
+  /* ── Output ── */
+  .output-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 18px; padding: 28px;
+    display: none; animation: fadeUp 0.45s ease;
+  }
+  .output-card.visible { display: block; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .output-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px; margin-bottom: 22px;
+  }
+  .output-img-wrap {
+    border: 1px solid var(--border); border-radius: 12px;
+    overflow: hidden; background: var(--surface2);
+  }
+  .output-img-wrap img { width: 100%; display: block; filter: saturate(.85); }
+  .output-img-wrap .img-label {
+    padding: 8px 12px;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.6rem; color: var(--text-muted);
+    letter-spacing: .12em; text-transform: uppercase;
+    border-top: 1px solid var(--border);
+  }
+
+  .progress-bar-bg {
+    height: 3px; background: rgba(255,255,255,0.05);
+    border-radius: 99px; overflow: hidden; margin-bottom: 10px;
+  }
+  .progress-bar-fill {
+    height: 100%; border-radius: 99px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    width: 0%; transition: width .4s ease;
+  }
+  .progress-info {
+    display: flex; justify-content: space-between;
+    font-family: 'DM Mono', monospace;
+    font-size: 0.66rem; color: var(--text-muted); letter-spacing: .05em;
+  }
+
+  .download-btn {
+    display: inline-block; margin-top: 18px;
+    background: transparent; border: 1px solid rgba(94,184,255,0.3);
+    color: var(--accent2); padding: 10px 22px;
+    font-family: 'DM Mono', monospace; font-size: 0.7rem;
+    letter-spacing: .12em; text-transform: uppercase;
+    text-decoration: none; border-radius: 10px;
+    transition: background .2s, color .2s, border-color .2s;
+  }
+  .download-btn:hover {
+    background: rgba(94,184,255,0.08);
+    border-color: var(--accent2); color: #fff;
+  }
+
+  /* ── Spinner ── */
+  .spinner { display: none; margin-top: 10px; }
+  .spinner-inner {
+    display: inline-flex; align-items: center; gap: 12px;
+    color: var(--text-dim);
+    font-family: 'DM Mono', monospace; font-size: 0.7rem; letter-spacing: .1em;
+  }
+  .spinner-dots { display: flex; gap: 5px; }
+  .spinner-dots span {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+  .spinner-dots span:nth-child(2) { animation-delay: .2s; }
+  .spinner-dots span:nth-child(3) { animation-delay: .4s; }
+  @keyframes pulse {
+    0%,80%,100% { opacity:.2; transform:scale(.8); }
+    40%         { opacity:1;  transform:scale(1); }
+  }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed; bottom: 32px; left: 50%;
+    transform: translateX(-50%) translateY(12px);
+    background: rgba(255,100,100,0.12);
+    border: 1px solid rgba(255,100,100,0.25);
+    color: #fca5a5; padding: 10px 20px;
+    font-family: 'DM Mono', monospace; font-size: 0.76rem;
+    letter-spacing: .05em; border-radius: 10px;
+    opacity: 0; transition: opacity .3s, transform .3s;
+    pointer-events: none; z-index: 1000;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (max-width: 720px) {
+    .two-col { grid-template-columns: 1fr; }
+    .params-card { grid-template-columns: 1fr 1fr; }
+    .output-grid { grid-template-columns: 1fr; }
+    .page { padding: 40px 20px 60px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header class="header">
+    <div class="eyebrow">Computer Vision · VGG19</div>
+    <h1>Neural<br><em>Style Transfer.</em></h1>
+    <p class="subtitle">Blend any artistic style onto a content image using deep feature representations from a pre-trained VGG19 network.</p>
+  </header>
+
+  <div class="two-col">
+
+    <!-- Content upload -->
+    <div class="card">
+      <div class="section-label">01 — Upload your photo</div>
+      <div class="drop-zone" id="dropZone">
+        <input type="file" id="contentInput" accept="image/*" />
+        <div class="dz-icon">⬡</div>
+        <p><strong>Drop image here</strong><br/>or click to browse<br/><span style="font-size:0.72rem;color:var(--text-muted)">PNG · JPG · WEBP</span></p>
+        <img class="preview" id="contentPreview" src="" alt="content preview"/>
+        <div class="overlay" id="contentOverlay"><span>Change image</span></div>
+      </div>
+      <div class="filename" id="contentFilename">No file selected</div>
+    </div>
+
+    <!-- Style selection -->
+    <div class="card">
+      <div class="section-label">02 — Choose a style</div>
+      <div class="content-grid" id="styleGrid"></div>
+    </div>
+
+  </div>
+
+  <!-- Params -->
+  <div class="params-card">
+    <div class="param-group">
+      <label>Learning Rate</label>
+      <input type="number" id="lr" value="0.05" min="0.01" max="0.2" step="0.01"/>
+    </div>
+    <div class="param-group">
+      <label>Epochs</label>
+      <input type="range" id="epochsRange" value="50" min="50" max="200" step="10"
+             oninput="document.getElementById('epochsVal').textContent=this.value"/>
+      <div class="val"><span id="epochsVal">50</span></div>
+    </div>
+    <div class="param-group">
+      <label>Alpha — content</label>
+      <input type="range" id="alphaRange" min="1" max="100" step="1" value="30"
+             oninput="document.getElementById('alphaVal').textContent=this.value"/>
+      <div class="val"><span id="alphaVal">30</span></div>
+    </div>
+    <div class="param-group">
+      <label>Beta — style</label>
+      <input type="range" id="betaRange" min="1" max="100" step="1" value="10"
+             oninput="document.getElementById('betaVal').textContent=this.value"/>
+      <div class="val"><span id="betaVal">10</span></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:10px;align-items:flex-start">
+      <button class="run-btn" id="runBtn" onclick="runNST()">Run Transfer →</button>
+      <div class="spinner" id="spinner">
+        <div class="spinner-inner">
+          <div class="spinner-dots"><span></span><span></span><span></span></div>
+          Processing
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Output -->
+  <div class="output-card" id="outputPanel">
+    <div class="section-label" style="margin-bottom:20px">03 — Result</div>
+    <div class="output-grid">
+      <div class="output-img-wrap">
+        <img id="outContent" src="" alt="content"/>
+        <div class="img-label">Content</div>
+      </div>
+      <div class="output-img-wrap">
+        <img id="outStyle" src="" alt="style"/>
+        <div class="img-label">Style</div>
+      </div>
+      <div class="output-img-wrap">
+        <img id="outResult" src="" alt="result"/>
+        <div class="img-label">Generated</div>
+      </div>
+    </div>
+    <div class="progress-bar-bg"><div class="progress-bar-fill" id="progressFill"></div></div>
+    <div class="progress-info">
+      <span id="progressLabel">Initializing…</span>
+      <span id="progressPct">0%</span>
+    </div>
+    <a class="download-btn" id="downloadBtn" style="display:none" download="nst_output.png">
+      ↓ Download result
+    </a>
+  </div>
+
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Style images from /style folder ───────────────────────────────
+// Add your Kaggle artwork filenames here
+const STYLE_IMAGES = [
+  { file: 'style1.jpg',    label: '1' },
+  { file: 'style2.jpg',          label: '2' },
+  { file: 'style3.jpg',       label: '3' },
+  { file: 'style4.jpg',           label: '4' },
+  { file: 'style5.jpg',         label: '5' },
+  { file: 'style6.jpg',         label: '6' },
+  { file: 'style7.jpg',         label: '7' },
+  { file: 'style8.jpg',         label: '8' },
+  { file: 'style9.jpg',         label: '9' },
+];
+
+let selectedStyle = null;   // style chosen from the grid
+let contentFile   = null;   // content image uploaded by the user
+
+// ── Build style grid ───────────────────────────────────────────────
+const grid = document.getElementById('styleGrid');
+STYLE_IMAGES.forEach(item => {
+  const card = document.createElement('div');
+  card.className = 'content-card';
+  card.innerHTML = `
+    <img src="style/${item.file}" alt="${item.label}"
+         onerror="this.closest('.content-card').style.display='none'"/>
+    <div class="card-name">${item.label}</div>`;
+  card.addEventListener('click', () => {
+    document.querySelectorAll('.content-card').forEach(c => c.classList.remove('selected'));
+    card.classList.add('selected');
+    selectedStyle = item;
+  });
+  grid.appendChild(card);
+});
+for (let i = STYLE_IMAGES.length; i < 6; i++) {
+  const ph = document.createElement('div');
+  ph.className = 'placeholder-card';
+  ph.innerHTML = `<div class="ph-icon">⬡</div>`;
+  grid.appendChild(ph);
+}
+
+// ── Content image upload ───────────────────────────────────────────
+const dropZone       = document.getElementById('dropZone');
+const contentInput   = document.getElementById('contentInput');
+const contentPreview = document.getElementById('contentPreview');
+const contentOverlay = document.getElementById('contentOverlay');
+const contentFilename = document.getElementById('contentFilename');
+
+function handleContentFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  contentFile = file;
+  contentPreview.src = URL.createObjectURL(file);
+  contentPreview.classList.add('visible');
+  contentOverlay.classList.add('has-img');
+  contentFilename.textContent = file.name;
+}
+
+contentInput.addEventListener('change', e => handleContentFile(e.target.files[0]));
+dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => {
+  e.preventDefault(); dropZone.classList.remove('dragover');
+  handleContentFile(e.dataTransfer.files[0]);
+});
+
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+async function runNST() {
+  if (!contentFile)    return showToast('Please upload your photo.');
+  if (!selectedStyle)  return showToast('Please select a style.');
+
+  const lr     = parseFloat(document.getElementById('lr').value);
+  const epochs = parseInt(document.getElementById('epochsRange').value);
+  const alpha  = parseInt(document.getElementById('alphaRange').value);
+  const beta   = parseInt(document.getElementById('betaRange').value);
+
+  document.getElementById('outputPanel').classList.add('visible');
+  document.getElementById('outContent').src = URL.createObjectURL(contentFile);
+  document.getElementById('outStyle').src   = `style/${selectedStyle.file}`;
+  document.getElementById('outResult').src  = '';
+  document.getElementById('downloadBtn').style.display = 'none';
+
+  const styleBlob = await fetch(`style/${selectedStyle.file}`).then(r => r.blob());
+  const formData = new FormData();
+  formData.append('content',       contentFile, contentFile.name);
+  formData.append('style',         styleBlob,   selectedStyle.file);
+  formData.append('learning_rate', lr);
+  formData.append('epochs',        epochs);
+  formData.append('alpha',         alpha);
+  formData.append('beta',          beta);
+
+  const btn     = document.getElementById('runBtn');
+  const spinner = document.getElementById('spinner');
+  btn.disabled = true; spinner.style.display = 'block';
+  animateProgress(epochs);
+
+  try {
+    const res = await fetch('/style-transfer', { method: 'POST', body: formData });
+    if (!res.ok) throw new Error();
+    const url = URL.createObjectURL(await res.blob());
+    document.getElementById('outResult').src = url;
+    const dlBtn = document.getElementById('downloadBtn');
+    dlBtn.href = url; dlBtn.style.display = 'inline-block';
+    setProgress(100, 'Done');
+  } catch {
+    showToast('Error connecting to backend. Is the server running?');
+    setProgress(0, 'Failed');
+  } finally {
+    btn.disabled = false; spinner.style.display = 'none';
+  }
+}
+
+let progressInterval = null;
+function animateProgress(epochs) {
+  clearInterval(progressInterval);
+  let pct = 0;
+  setProgress(0, 'Running…');
+  progressInterval = setInterval(() => {
+    pct = Math.min(pct + 1, 92);
+    setProgress(pct, `Epoch ~${Math.round(pct / 100 * epochs)} / ${epochs}`);
+    if (pct >= 92) clearInterval(progressInterval);
+  }, (epochs * 20) / 100);
+}
+
+function setProgress(pct, label) {
+  document.getElementById('progressFill').style.width = pct + '%';
+  document.getElementById('progressLabel').textContent = label;
+  document.getElementById('progressPct').textContent   = pct + '%';
+  if (pct >= 100) clearInterval(progressInterval);
+}
+</script>
+</body>
+</html>
