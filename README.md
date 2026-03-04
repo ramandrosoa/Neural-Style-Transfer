@@ -55,22 +55,6 @@ Minimize J = α · J_content + β · J_style
 
 Where `α` and `β` control the balance between content preservation and style application.
 
-### 3. 🔁 From Notebook to Deployment
-| Stage | What happens |
-|---|---|
-| **Notebook** (`nst_training.py`) | Loads images from local paths, runs the optimization loop, saves output |
-| **Deploy module** (`nst_deploy.py`) | Same logic refactored to accept image bytes, VGG19 loaded once at startup |
-| **API** (`api.py`) | FastAPI server exposes a `/style-transfer` endpoint, validates inputs, calls `nst_deploy.py` |
-| **UI** (`nst_ui.html`) | User uploads their photo, picks an artwork style, adjusts hyperparameters, downloads result |
-| **Deployment** | Dockerized and hosted on Hugging Face Spaces, served entirely from one `uvicorn` process |
-
----
-
-## 📊 Data
-
-- 🖼️ **Content images** — [Google Scraped Image Dataset](https://www.kaggle.com/datasets/duttadebadri/image-classification)
-- 🎨 **Style images** — [Best Artworks of All Time](https://www.kaggle.com/datasets/ikarus777/best-artworks-of-all-time)
-
 ---
 
 ## 🎛️ Hyperparameters
