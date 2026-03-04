@@ -58,7 +58,7 @@ Where `α` and `β` control the balance between content preservation and style a
 ---
 
 ## 🎛️ Hyperparameters
-
+The following values were selected in the training notebook. In the app, these hyperparameters can be adjusted via the UI.
 | Parameter | Default | Description |
 |---|---|---|
 | `learning_rate` | `0.005` | Adam optimizer learning rate |
@@ -75,6 +75,8 @@ Where `α` and `β` control the balance between content preservation and style a
 - 🖼️ Artistic image creation
 
 ---
+## 🖼️ Example Result
+ ![result](result.PNG)
 
 ## 📚 References
 
