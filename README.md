@@ -76,7 +76,7 @@ The following values were selected in the training notebook. In the app, these h
 
 ---
 ## 🖼️ Example Result
- ![result](result.PNG)
+ ![results](results.PNG)
 
 ## 📚 References
 
