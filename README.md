@@ -34,7 +34,7 @@ Try it on Hugging Face Spaces → https://ramandrosoa-neural-style-transfer.hf.s
 ├── nst_ui.html                     # Web UI
 ├── requirements.txt
 ├── Dockerfile
-└── style/                          # Kaggle artwork images
+└── style/                          # Artwork images
 ```
 
 ---
